@@ -1,11 +1,14 @@
 import streamlit as st
 import pandas as pd
 import math
+import snowflake
+import snowflake.connector
+import matplotlib.pyplot as plt
 from pathlib import Path
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
-    page_title='GDP dashboard',
+    page_title='Code Challenge',
     page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
 )
 
@@ -58,6 +61,26 @@ def get_gdp_data():
     return gdp_df
 
 gdp_df = get_gdp_data()
+
+def _get_snowflake_connection():
+    credentials = {
+"user": "guest_R8FNL6AING1Q",
+"password": "IST1100740Jo@o",
+"account": "ui76830.west-europe.azure",
+"database": "CODE_CHALLENGE_R8FNL6AING1Q",
+"schema": "source",
+"warehouse": "guest_code_challenge_R8FNL6AING1Q",
+"role": "guest_code_challenge_R8FNL6AING1Q",
+    }
+    return snowflake.connector.connect(**credentials)
+
+@st.cache_data
+def fetch_data(query):
+    conn = _get_snowflake_connection()
+    with conn.cursor() as cur:
+        cur.execute(query)
+        return pd.DataFrame(cur.fetchall(), columns=[desc[0] for desc in cur.description])
+
 
 # -----------------------------------------------------------------------------
 # Draw the actual page
@@ -149,3 +172,20 @@ for i, country in enumerate(selected_countries):
             delta=growth,
             delta_color=delta_color
         )
+
+query = "SELECT c.sector_name,p.date,SUM(p.shares*m.close_usd) AS SECTOR_VALUE,FROM company c JOIN position p ON c.id = p.company_id JOIN price m ON (p.company_id=m.company_id AND p.date=m.date) WHERE m.date = (SELECT MAX(date) FROM price) GROUP BY c.sector_name,p.date ORDER BY p.date DESC, SECTOR_VALUE DESC;"
+data = fetch_data(query)
+
+#data.set_index("SECTOR_NAME")
+st.dataframe(data)
+st.bar_chart(data["SECTOR_VALUE"])
+
+
+cols = st.columns(4)
+for i,sector in enumerate(data['SECTOR_NAME']):
+    col = cols[i % len(cols)]
+    st.metric(
+            label=f'{sector} Value (USD)',
+            value=f'{data["SECTOR_VALUE"][i]/1000000000:,.0f} B',
+    )
+
