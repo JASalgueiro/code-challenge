@@ -1,8 +1,10 @@
-# :earth_americas: GDP dashboard template
+# :chart_with_upwards_trend: Stock Market Dashboard
 
-A simple Streamlit app showing the GDP of different countries in the world.
-
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://gdp-dashboard-template.streamlit.app/)
+Dashboard made for Code Challenge with three widgets:\n
+-Top 10 sectors by position in most recent date available,\n
+-Information on the top 25% companies with the largest average position (USD) in the last year\n
+-Visualize a given company's stock price time series\n
+'''
 
 ### How to run it on your own machine
 

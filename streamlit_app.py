@@ -54,6 +54,8 @@ most_recent_date = date["MAX(DATE)"].values[0]
 
 
 st.header(f'Top 10 sectors by position in {most_recent_date}', divider='gray')
+''
+''
 query = (
     "SELECT TOP 10 "
     "c.sector_name, "
@@ -67,7 +69,7 @@ query = (
     "ORDER BY SECTOR_POSITION DESC;"
 )
 data = fetch_data(query)
-st.bar_chart(data["SECTOR_POSITION"], horizontal=True)
+st.bar_chart(data,x="SECTOR_NAME",x_label="Sector Position",y="SECTOR_POSITION", y_label="Sector Name",horizontal=True)
 
 cols = st.columns(4)
 for i,sector in enumerate(data['SECTOR_NAME']):
@@ -82,6 +84,8 @@ for i,sector in enumerate(data['SECTOR_NAME']):
 ''
 
 st.header(f'Top 25% companies with the largest average position (USD) in the last year', divider='gray')
+''
+''
 ranked_averages_cte = (
     "WITH RankedAverages AS ("
     "SELECT "
@@ -121,7 +125,7 @@ final_query = (
     "SELECT "
     "RankedAverages.ticker, "
     "sector_name, "
-    "shares, "
+    "DailyInfo.shares, "
     "close_usd, "
     "Average "
     "FROM RankedAverages "
@@ -133,13 +137,38 @@ final_query = (
 query = ranked_averages_cte + daily_info_cte + final_query
 
 data = fetch_data(query)
-st.dataframe(data)
+st.dataframe(data,
+             column_config={
+        "CLOSE_USD": st.column_config.NumberColumn(
+            "Last Close",
+            help="Last Close Price (in USD)",
+            min_value=0,
+            format="$ %f",
+        ),
+        "TICKER": st.column_config.TextColumn(
+            "Ticker"
+        ),
+        "SECTOR_NAME": st.column_config.TextColumn(
+            "Sector Name"
+        ),
+        "SHARES": st.column_config.NumberColumn(
+            "Position Shares",
+            help="Share Quantity",
+            min_value=0,
+        ),
+        "AVERAGE": st.column_config.NumberColumn(
+            "Last Year Average",
+            help="Average Position of Last Year"
+        )
+    },
+    hide_index=True)
 
 ''
 ''
 
 st.header(f'Company daily close price chart', divider='gray')
-
+''
+''
 query="SELECT DISTINCT IDENTIFIER FROM price;"
 identifiers = fetch_data(query)
 
@@ -159,6 +188,7 @@ if company != None:
     st.line_chart(
         data,
         x='DATE',
+        x_label="Date",
         y='CLOSE_USD',
         y_label="Close Price in USD",
     )
