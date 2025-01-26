@@ -6,7 +6,7 @@ import snowflake.connector
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
     page_title='Code Challenge',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    page_icon=':chart_with_upwards_trend:', # This is an emoji shortcode. Could be a URL too.
 )
 
 # -----------------------------------------------------------------------------
@@ -37,11 +37,12 @@ def fetch_data(query):
 
 # Set the title that appears at the top of the page.
 '''
-# :earth_americas: GDP dashboard
+# :chart_with_upwards_trend: Stock Market Dashboard
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
+Dashboard made for Code Challenge with three widgets:\n
+-Top 10 sectors by position in most recent date available,\n
+-Information on the top 25% companies with the largest average position (USD) in the last year\n
+-Visualize a given company's stock price time series\n
 '''
 
 # Add some spacing
@@ -53,7 +54,18 @@ most_recent_date = date["MAX(DATE)"].values[0]
 
 
 st.header(f'Top 10 sectors by position in {most_recent_date}', divider='gray')
-query = "SELECT TOP 10 c.sector_name, p.date,SUM(p.shares) AS SECTOR_POSITION,FROM company c JOIN position p ON c.id = p.company_id JOIN price m ON (p.company_id=m.company_id AND p.date=m.date) WHERE m.date = (SELECT MAX(date) FROM price) GROUP BY c.sector_name,p.date ORDER BY SECTOR_POSITION DESC;"
+query = (
+    "SELECT TOP 10 "
+    "c.sector_name, "
+    "p.date, "
+    "SUM(p.shares) AS SECTOR_POSITION "
+    "FROM company c "
+    "JOIN position p ON c.id = p.company_id "
+    "JOIN price m ON (p.company_id = m.company_id AND p.date = m.date) "
+    "WHERE m.date = (SELECT MAX(date) FROM price) "
+    "GROUP BY c.sector_name, p.date "
+    "ORDER BY SECTOR_POSITION DESC;"
+)
 data = fetch_data(query)
 st.bar_chart(data["SECTOR_POSITION"], horizontal=True)
 
@@ -66,13 +78,67 @@ for i,sector in enumerate(data['SECTOR_NAME']):
                 value=f'{data["SECTOR_POSITION"][i]/1000000:,.0f} M',
         )
 
-st.header(f'Top 25% companies with the largest average position (USD) in the last year.', divider='gray')
-query="SELECT TOP 25 c.ticker, AVG(m.close_usd*p.shares) AS Average FROM company c JOIN position p ON c.id = p.company_id JOIN price m ON (p.company_id=m.company_id AND p.date=m.date) WHERE m.date BETWEEN '1/01/2024' AND '12/31/2024' GROUP BY c.ticker ORDER BY Average DESC;"
+''
+''
+
+st.header(f'Top 25% companies with the largest average position (USD) in the last year', divider='gray')
+ranked_averages_cte = (
+    "WITH RankedAverages AS ("
+    "SELECT "
+    "c.ticker, "
+    "c.sector_name, "
+    "AVG(m.close_usd * p.shares) AS Average, "
+    "NTILE(4) OVER (ORDER BY AVG(m.close_usd * p.shares) DESC) AS Quartile "
+    "FROM "
+    "price m "
+    "JOIN position p "
+    "ON m.company_id = p.company_id AND m.date = p.date "
+    "JOIN company c "
+    "ON m.company_id = c.id "
+    "WHERE m.date BETWEEN '2024-01-01' AND '2024-12-31' "
+    "GROUP BY c.ticker, c.sector_name"
+    "), "
+)
+
+daily_info_cte = (
+    "DailyInfo AS ("
+    "SELECT "
+    "c.ticker, "
+    "p.shares, "
+    "m.close_usd "
+    "FROM "
+    "price m "
+    "JOIN position p "
+    "ON m.company_id = p.company_id AND m.date = p.date "
+    "JOIN company c "
+    "ON m.company_id = c.id "
+    "WHERE m.date = (SELECT MAX(date) FROM price) "
+    "GROUP BY c.ticker, p.shares, m.close_usd"
+    ") "
+)
+
+final_query = (
+    "SELECT "
+    "RankedAverages.ticker, "
+    "sector_name, "
+    "shares, "
+    "close_usd, "
+    "Average "
+    "FROM RankedAverages "
+    "JOIN DailyInfo "
+    "ON RankedAverages.ticker = DailyInfo.ticker "
+    "WHERE Quartile = 1 "
+    "ORDER BY Average DESC;"
+)
+query = ranked_averages_cte + daily_info_cte + final_query
+
 data = fetch_data(query)
-st.table(data)
+st.dataframe(data)
 
+''
+''
 
-st.header(f'Company daily close price chart.', divider='gray')
+st.header(f'Company daily close price chart', divider='gray')
 
 query="SELECT DISTINCT IDENTIFIER FROM price;"
 identifiers = fetch_data(query)
