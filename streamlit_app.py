@@ -15,53 +15,6 @@ st.set_page_config(
 # -----------------------------------------------------------------------------
 # Declare some useful functions.
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
-
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
-
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
-
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
-
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
-
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
-
-    return gdp_df
-
-gdp_df = get_gdp_data()
-
 def _get_snowflake_connection():
     credentials = {
 "user": "guest_R8FNL6AING1Q",
@@ -98,94 +51,51 @@ But it's otherwise a great (and did I mention _free_?) source of data.
 ''
 ''
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
+date = fetch_data("SELECT MAX(date) FROM position")
+most_recent_date = date["MAX(DATE)"].values[0]
 
 
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
-
-query = "SELECT c.sector_name,p.date,SUM(p.shares*m.close_usd) AS SECTOR_VALUE,FROM company c JOIN position p ON c.id = p.company_id JOIN price m ON (p.company_id=m.company_id AND p.date=m.date) WHERE m.date = (SELECT MAX(date) FROM price) GROUP BY c.sector_name,p.date ORDER BY p.date DESC, SECTOR_VALUE DESC;"
+st.header(f'Top 10 sectors by position in {most_recent_date}', divider='gray')
+query = "SELECT TOP 10 c.sector_name, p.date,SUM(p.shares) AS SECTOR_POSITION,FROM company c JOIN position p ON c.id = p.company_id JOIN price m ON (p.company_id=m.company_id AND p.date=m.date) WHERE m.date = (SELECT MAX(date) FROM price) GROUP BY c.sector_name,p.date ORDER BY SECTOR_POSITION DESC;"
 data = fetch_data(query)
+st.bar_chart(data["SECTOR_POSITION"], horizontal=True)
 
-#data.set_index("SECTOR_NAME")
-st.dataframe(data)
-st.bar_chart(data["SECTOR_VALUE"])
-
-
-cols = st.columns(4)
+cols = st.columns(3)
 for i,sector in enumerate(data['SECTOR_NAME']):
     col = cols[i % len(cols)]
-    st.metric(
-            label=f'{sector} Value (USD)',
-            value=f'{data["SECTOR_VALUE"][i]/1000000000:,.0f} B',
-    )
+    with col:
+        st.metric(
+                label=f'{sector}',
+                value=f'{data["SECTOR_POSITION"][i]/1000000:,.0f} M',
+        )
 
+st.header(f'Top 25% companies with the largest average position (USD) in the last year.', divider='gray')
+query="SELECT TOP 25 c.ticker, AVG(m.close_usd*p.shares) AS Average FROM company c JOIN position p ON c.id = p.company_id JOIN price m ON (p.company_id=m.company_id AND p.date=m.date) WHERE m.date BETWEEN '1/01/2024' AND '12/31/2024' GROUP BY c.ticker ORDER BY Average DESC;"
+data = fetch_data(query)
+st.table(data)
+
+
+st.header(f'Company daily close price chart.', divider='gray')
+
+query="SELECT DISTINCT IDENTIFIER FROM price;"
+identifiers = fetch_data(query)
+
+companies = identifiers['IDENTIFIER'].unique()
+
+company = st.selectbox(
+    "Which company would you like to see?",
+    companies,
+    index=None,
+    placeholder="Select company",
+)
+
+if company != None:
+    query="SELECT * FROM price WHERE IDENTIFIER = '"+ company +"' ORDER BY DATE DESC;"
+    data = fetch_data(query)
+
+    st.line_chart(
+        data,
+        x='DATE',
+        y='CLOSE_USD',
+        y_label="Close Price in USD",
+    )
