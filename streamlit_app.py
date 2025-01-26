@@ -1,10 +1,7 @@
 import streamlit as st
 import pandas as pd
-import math
 import snowflake
 import snowflake.connector
-import matplotlib.pyplot as plt
-from pathlib import Path
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
@@ -60,12 +57,12 @@ query = "SELECT TOP 10 c.sector_name, p.date,SUM(p.shares) AS SECTOR_POSITION,FR
 data = fetch_data(query)
 st.bar_chart(data["SECTOR_POSITION"], horizontal=True)
 
-cols = st.columns(3)
+cols = st.columns(4)
 for i,sector in enumerate(data['SECTOR_NAME']):
     col = cols[i % len(cols)]
     with col:
         st.metric(
-                label=f'{sector}',
+                label=f'{i+1} : {sector}',
                 value=f'{data["SECTOR_POSITION"][i]/1000000:,.0f} M',
         )
 
