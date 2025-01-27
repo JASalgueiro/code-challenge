@@ -1,10 +1,11 @@
 # :chart_with_upwards_trend: Stock Market Dashboard
 
-Dashboard made for Code Challenge with three widgets:\n
--Top 10 sectors by position in most recent date available,\n
--Information on the top 25% companies with the largest average position (USD) in the last year\n
--Visualize a given company's stock price time series\n
-'''
+Dashboard made for Code Challenge with three widgets:
+
+  Top 10 sectors by position in most recent date available  
+  Information on the top 25% companies with the largest average position (USD) in the last year  
+  Visualize a given company's stock price time series  
+
 
 ### How to run it on your own machine
 

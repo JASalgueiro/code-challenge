@@ -76,7 +76,7 @@ for i,sector in enumerate(data['SECTOR_NAME']):
     col = cols[i % len(cols)]
     with col:
         st.metric(
-                label=f'{i+1} : {sector}',
+                label=f'#{i+1} : {sector}',
                 value=f'{data["SECTOR_POSITION"][i]/1000000:,.0f} M',
         )
 
@@ -143,7 +143,7 @@ st.dataframe(data,
             "Last Close",
             help="Last Close Price (in USD)",
             min_value=0,
-            format="$ %f",
+            format="$ %.2f",
         ),
         "TICKER": st.column_config.TextColumn(
             "Ticker"
